@@ -24,3 +24,21 @@ Required attributes:
   metrics across a cluster of similar sinks. If one sink in a cluster
   goes down, it should continue sending to the rest.
 
+# In-progress notes
+
+Describe the state of the project here as I make changes.
+
+I'm adding a terraform template to create some AWS resources for the
+project. I'm using the enabling team sandbox found at
+https://manage.rackspace.com/racker/rackspace-accounts/1317477/aws-accounts/622383701450
+Must be on vpn to reach it.
+
+Generate temporary credentials through the RAX FAWS page above, then
+run terrform with:
+
+    AWS_ACCESS_KEY_ID=... AWS_SECRET_ACCESS_KEY=... AWS_SESSION_TOKEN=... AWS_DEFAULT_REGION="us-east-1" terraform apply
+
+On success, it'll write the public ip of the server it creates. I used
+a manual keypair called ryan-metrics-playground-keypair.
+
+The state file is committed with all resources created.
