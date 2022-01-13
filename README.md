@@ -41,4 +41,6 @@ run terrform with:
 On success, it'll write the public ip of the server it creates. I used
 a manual keypair called ryan-metrics-playground-keypair.
 
-The state file is committed with all resources created.
+The state file is committed. Make sure to keep it up to date, but most
+likely it'll always be empty in the repo. I should only have resources
+up for a short time and destroy them when I'm finished.
