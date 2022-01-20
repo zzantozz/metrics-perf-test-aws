@@ -33,13 +33,11 @@ project. I'm using the enabling team sandbox found at
 https://manage.rackspace.com/racker/rackspace-accounts/1317477/aws-accounts/622383701450
 Must be on vpn to reach it.
 
-Generate temporary credentials through the RAX FAWS page above, then
-run terrform with:
+Generate temporary credentials through the RAX FAWS page above, copy
+the exports into terminal, then just `terraform apply`.
 
-    AWS_ACCESS_KEY_ID=... AWS_SECRET_ACCESS_KEY=... AWS_SESSION_TOKEN=... AWS_DEFAULT_REGION="us-east-1" terraform apply
-
-On success, it'll write the public ip of the server it creates. I used
-a manual keypair called ryan-metrics-playground-keypair.
+On success, it'll write the public ip of the server it creates. SSH to
+the instance as user `ec2-user`. It adds the local keypair to the server.
 
 The state file is committed. Make sure to keep it up to date, but most
 likely it'll always be empty in the repo. I should only have resources

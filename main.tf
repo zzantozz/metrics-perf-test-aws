@@ -11,6 +11,15 @@ provider "aws" {
   region = "us-east-1"
 }
 
+locals {
+  # ports to open to me only for working with fluent
+  fluent_ports = {
+    2020: "management",
+    5170: "tcp input",
+    8888: "http input",
+  }
+}
+
 resource "aws_vpc" "main_vpc" {
   cidr_block = "10.0.0.0/16"
   tags = {
@@ -84,6 +93,31 @@ resource "aws_security_group_rule" "main_sg_ssh_from_home" {
   ]
 }
 
+resource "aws_security_group_rule" "main_sg_fluent_ports_from_home" {
+  for_each = local.fluent_ports
+  description = "Fluent port from home - ${each.value}"
+  type = "ingress"
+  security_group_id = aws_security_group.main_vpc_security_group.id
+  protocol = "tcp"
+  from_port = each.key
+  to_port = each.key
+  cidr_blocks = [
+    "70.123.226.90/32"
+  ]
+}
+
+resource "aws_security_group_rule" "main_sg_default_egress" {
+  description = "Default egress"
+  type = "egress"
+  security_group_id = aws_security_group.main_vpc_security_group.id
+  protocol        = "-1"
+  from_port       = 0
+  to_port         = 0
+  cidr_blocks = [
+    "0.0.0.0/0"
+  ]
+}
+
 data "aws_ami" "amazon-linux-ami" {
   most_recent = true
   filter {
@@ -97,6 +131,15 @@ data "aws_ami" "amazon-linux-ami" {
   ]
 }
 
+resource "aws_key_pair" "ryans_keypair" {
+  key_name   = "ryan-metrics-playground-keypair"
+  public_key = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDCo9StjVU5E97ZCuNDJehjwtJeSSb5Dg7pJWzc+2uAuecJTE/C/67+T1aJ2xLy36Sx9gz2diySSm8rOci/83p8V2mrRLw6a0IXHEoo9h7rDu+0IEX/ljKVYR/YwdcEpDO5PxICJ3BG3GFcclNI6b8kxinMLm/8W7mX47y00tKtNZSANbyE8ohXgmjU29PSnTspKdRIXmaT7k4AJ+NRoztgqxNO2GRSDMYZeEkiOlNOZtubhz8BFzKqUg6MGAZddLKY/U2kqzhydd42swV2aJ3tjAz4cl8msr8u+HA8Qr+5+8pJrSsWBbeJwdE4tk4A5fPTcXwl+SCycZ7dSIB2x7GF ryan@ryan-laptop"
+  tags = {
+    User = "Ryan"
+    Environment = "Metrics playground"
+  }
+}
+
 resource "aws_instance" "first_instance" {
   ami = data.aws_ami.amazon-linux-ami.id
   instance_type = "t2.micro"
@@ -106,6 +149,7 @@ resource "aws_instance" "first_instance" {
   vpc_security_group_ids = [
     aws_security_group.main_vpc_security_group.id
   ]
+  user_data = file("init.sh")
   tags = {
     User = "Ryan"
     Environment = "Metrics playground"
