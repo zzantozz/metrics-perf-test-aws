@@ -36,8 +36,8 @@ Must be on vpn to reach it.
 Generate temporary credentials through the RAX FAWS page above, copy
 the exports into terminal, then just `terraform apply`.
 
-On success, it'll write the public ip of the server it creates. SSH to
-the instance as user `ec2-user`. It adds the local keypair to the server.
+On success, it'll write instance public ip's. SSH to them as user
+`ec2-user`. It adds the local machine's keypair to the instances.
 
 The state file is committed. Make sure to keep it up to date, but most
 likely it'll always be empty in the repo. I should only have resources

@@ -44,6 +44,13 @@ cat <<EOF > /etc/td-agent-bit/td-agent-bit.conf
     port   5170
     format none
 
+[OUTPUT]
+    name   http
+    host   ${instance2_ip}
+    port   8888
+    format json
+    match  *
+
 # The counter is good for testing with small amounts of metrics, but with high volume, it seems to stop working properly
 [OUTPUT]
     Name  counter
@@ -68,7 +75,7 @@ systemctl start td-agent-bit
 cat <<EOF > /home/ec2-user/logrotate-random-events
 /home/ec2-user/random-events {
     size 250M
-    rotate 9
+    rotate 3
     compress
 }
 EOF
