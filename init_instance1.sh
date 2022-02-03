@@ -1,11 +1,20 @@
 #!/bin/bash -e
 
-# install scribe, flume, fluentd, fluentbit?
-# provision publishers and a final destination of some kind
-# dest could be kinesis or dynamodb? careful of cost
-# how to measure throughput or time spent in each server?
-# instead, could just have a separate set of publisher -> forwarder -> dest for each one
-# .
+# The first instance generates random events and sends them to the second instance using fluent bit.
+# The volume of events generated is controlled by the argument to the spam.sh script in the crontab file.
+
+instance_id="instance1"
+
+cat << EOF > /usr/local/bin/instanceid
+#!/bin/bash
+echo "$instance_id"
+EOF
+chmod +x /usr/local/bin/instanceid
+
+etcd_token=${etcd_token}
+etcd_discovery_url=${etcd_discovery_url}
+${file("cloud-init/etcd.sh")}
+
 cat <<EOF > /etc/yum.repos.d/td-agent-bit.repo
 [td-agent-bit]
 name     = TD Agent Bit
@@ -17,6 +26,18 @@ EOF
 
 yum install --assumeyes td-agent-bit
 
+n=0
+while [ -z "$instance2_ip" ] && [ $n -lt 100 ]; do
+  echo "Waiting for instance2_ip in etcd..."
+  instance2_ip="$(/opt/etcd/etcdctl get instance2_ip --print-value-only)" || echo "etcd not ready yet"
+  n=$((n+1))
+  sleep 1
+done
+[ -z "$instance2_ip" ] && {
+  echo "Timed out waiting for instance2_ip in etcd"
+  exit 1
+}
+
 cat <<EOF > /etc/td-agent-bit/td-agent-bit.conf
 [SERVICE]
     HTTP_Server On
@@ -25,64 +46,46 @@ cat <<EOF > /etc/td-agent-bit/td-agent-bit.conf
 
 [INPUT]
     name tail
-    path /home/ec2-user/gutenberg-encyclopedia
-    tag encyclopedia
-
-[INPUT]
-    name tail
-    path /home/ec2-user/random-events
+    path /opt/random-events/log
     tag random
-
-[INPUT]
-    name http
-    host 0.0.0.0
-    port 8888
-
-[INPUT]
-    name   tcp
-    host   0.0.0.0
-    port   5170
-    format none
 
 [OUTPUT]
     name   http
-    host   ${instance2_ip}
+    host   $instance2_ip
     port   8888
     format json
     match  *
-
-# The counter is good for testing with small amounts of metrics, but with high volume, it seems to stop working properly
-[OUTPUT]
-    Name  counter
-    Match *
-
-#[OUTPUT]
-#    name  stdout
-#    match *
 EOF
 
-touch /home/ec2-user/gutenberg-encyclopedia
-# Grab the encyclopedia when you're ready to start streaming the data:
-# curl https://www.gutenberg.org/ebooks/200.txt.utf-8 > /home/ec2-user/gutenberg-encyclopedia
-
-touch /home/ec2-user/random-events
-# Random events appended to this file every minute, and the file is logrotated every minute. These things are
+mkdir /opt/random-events
+chmod 755 /opt/random-events
+touch /opt/random-events/log
+# Random events are appended to this file every minute, and the file is logrotated every minute. These things are
 # scheduled in cron.
+
+unset etcd_registered
+while [ -z "$etcd_registered" ]; do
+  /opt/etcd/etcdctl put $${instance_id}_ip "$my_ip" && etcd_registered=true
+done
 
 systemctl enable td-agent-bit
 systemctl start td-agent-bit
 
-cat <<EOF > /home/ec2-user/logrotate-random-events
-/home/ec2-user/random-events {
+cat <<EOF > /opt/logrotate-random-events
+/opt/random-events/log {
     size 250M
     rotate 3
-    compress
 }
 EOF
-echo "* * * * * root /usr/sbin/logrotate /home/ec2-user/logrotate-random-events" >> /etc/crontab
+echo "* * * * * root /usr/sbin/logrotate /opt/logrotate-random-events" >> /etc/crontab
 
-cat <<EOF > /home/ec2-user/spam.sh
+cat <<EOF > /opt/spam.sh
 tr -dc "a-zA-Z 0-9" < /dev/urandom | fold -w 200 | head -\$1
 EOF
-chmod +x /home/ec2-user/spam.sh
-echo "* * * * * root bash /home/ec2-user/spam.sh 500000 >> /home/ec2-user/random-events" >> /etc/crontab
+echo "* * * * * root bash /opt/spam.sh 10 >> /opt/random-events/log" >> /etc/crontab
+
+cat << EOF > /usr/local/bin/lsevents
+#!/bin/bash
+ls -la /opt/random-events
+EOF
+chmod +x /usr/local/bin/lsevents

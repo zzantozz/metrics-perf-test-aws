@@ -11,6 +11,16 @@ provider "aws" {
   region = "us-east-1"
 }
 
+variable "etcd_token" {
+  type = string
+  description = "A unique token for establishing the etcd cluster"
+}
+
+variable "etcd_discovery_url" {
+  type = string
+  description = "A unique unique discovery url for the etcd cluster to discover other members. Get one with: curl 'https://discovery.etcd.io/new?size=4'"
+}
+
 locals {
   # ports to open to me only for working with fluent
   fluent_ports = {
@@ -106,6 +116,18 @@ resource "aws_security_group_rule" "main_sg_fluent_ports_from_home" {
   ]
 }
 
+resource "aws_security_group_rule" "main_sg_internal_traffic" {
+  description = "Internal traffic"
+  type = "ingress"
+  security_group_id = aws_security_group.main_vpc_security_group.id
+  protocol        = "-1"
+  from_port       = 0
+  to_port         = 0
+  cidr_blocks = [
+    "10.0.0.0/24"
+  ]
+}
+
 resource "aws_security_group_rule" "main_sg_default_egress" {
   description = "Default egress"
   type = "egress"
@@ -150,7 +172,8 @@ resource "aws_instance" "instance1" {
     aws_security_group.main_vpc_security_group.id
   ]
   user_data = templatefile("init_instance1.sh", {
-    instance2_ip = aws_instance.instance2.private_ip
+    etcd_token = var.etcd_token
+    etcd_discovery_url = var.etcd_discovery_url
   })
   tags = {
     User = "Ryan"
@@ -168,6 +191,46 @@ resource "aws_instance" "instance2" {
     aws_security_group.main_vpc_security_group.id
   ]
   user_data = templatefile("init_instance2.sh", {
+    etcd_token = var.etcd_token
+    etcd_discovery_url = var.etcd_discovery_url
+  })
+  tags = {
+    User = "Ryan"
+    Environment = "Metrics playground"
+  }
+}
+
+resource "aws_instance" "instance3" {
+  ami = data.aws_ami.amazon-linux-ami.id
+  instance_type = "t2.micro" # at high volome, flume runs out of memory on this instance; bumping size up helps
+  key_name = "ryan-metrics-playground-keypair"
+  subnet_id = aws_subnet.main_subnet.id
+  associate_public_ip_address = true
+  vpc_security_group_ids = [
+    aws_security_group.main_vpc_security_group.id
+  ]
+  user_data = templatefile("init_instance3.sh", {
+    etcd_token = var.etcd_token
+    etcd_discovery_url = var.etcd_discovery_url
+  })
+  tags = {
+    User = "Ryan"
+    Environment = "Metrics playground"
+  }
+}
+
+resource "aws_instance" "instance4" {
+  ami = data.aws_ami.amazon-linux-ami.id
+  instance_type = "t2.micro"
+  key_name = "ryan-metrics-playground-keypair"
+  subnet_id = aws_subnet.main_subnet.id
+  associate_public_ip_address = true
+  vpc_security_group_ids = [
+    aws_security_group.main_vpc_security_group.id
+  ]
+  user_data = templatefile("init_instance4.sh", {
+    etcd_token = var.etcd_token
+    etcd_discovery_url = var.etcd_discovery_url
   })
   tags = {
     User = "Ryan"
@@ -180,4 +243,13 @@ output "instance1_public_ip" {
 }
 output "instance2_public_ip" {
   value = aws_instance.instance2.public_ip
+}
+output "instance3_public_ip" {
+  value = aws_instance.instance3.public_ip
+}
+output "instance4_public_ip" {
+  value = aws_instance.instance4.public_ip
+}
+output "cssh_all" {
+  value = "cssh -o '-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o User=ec2-user' ${aws_instance.instance1.public_ip} ${aws_instance.instance2.public_ip} ${aws_instance.instance3.public_ip} ${aws_instance.instance4.public_ip}"
 }
